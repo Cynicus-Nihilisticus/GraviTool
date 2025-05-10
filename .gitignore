@@ -1,0 +1,20 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Python bytecode and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE / Editor specific files
+# .vscode/
+.idea/
+*.swp
+*.swo
+
+# Other common files to ignore
+.DS_Store
+Thumbs.db
