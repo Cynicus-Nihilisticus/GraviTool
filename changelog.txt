@@ -1,2 +1,1 @@
-Author: CNP
-2025/05/11 - First public release
+2025-05-11 14:10 SAST - v1.0.0 - CNP - First public release.
