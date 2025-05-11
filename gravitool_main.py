@@ -21,17 +21,17 @@ class ToolTip:
         if self.tooltip_window or not self.text:
             return
         x = self.widget.winfo_rootx()
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5 
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
 
         screen_width = self.widget.winfo_screenwidth()
         screen_height = self.widget.winfo_screenheight()
 
         self.tooltip_window = tk.Toplevel(self.widget)
-        self.tooltip_window.wm_overrideredirect(True) 
+        self.tooltip_window.wm_overrideredirect(True)
 
         label = tk.Label(self.tooltip_window, text=self.text, justify='left',
                          background="#ffffe0", relief='solid', borderwidth=1,
-                         font=("tahoma", "8", "normal"), wraplength=350) 
+                         font=("tahoma", "8", "normal"), wraplength=350)
         label.pack(ipadx=2, ipady=2)
 
         tooltip_width = label.winfo_reqwidth()
@@ -40,7 +40,7 @@ class ToolTip:
         if x + tooltip_width > screen_width:
             x = screen_width - tooltip_width - 5
         if y + tooltip_height > screen_height:
-            y = self.widget.winfo_rooty() - tooltip_height - 5 
+            y = self.widget.winfo_rooty() - tooltip_height - 5
 
         self.tooltip_window.wm_geometry(f"+{int(x)}+{int(y)}")
 
@@ -146,10 +146,10 @@ class TextureModTool:
     def __init__(self, root_window):
         self.root = root_window
         self.root.title("Graviteam Asset Mod Tool (GTOS) - Refactored")
-        self.root.geometry("950x900") 
+        self.root.geometry("950x900")
 
         style = ttk.Style()
-        style.theme_use('clam') 
+        style.theme_use('clam')
 
         log_main_frame = ttk.Frame(self.root)
         log_frame = ttk.LabelFrame(log_main_frame, text="Log")
@@ -218,8 +218,8 @@ class TextureModTool:
         for definition in self.flatdata_definitions.values():
             for source in definition["sources"]:
                 self.asset_types_to_scan.append(source.copy())
-        
-        self.confirmation_result = None
+
+        self.confirmation_result = None # Used by _confirm_mod_details_dialog
 
     def create_setup_tab(self, tab_frame):
         frame = ttk.Frame(tab_frame, padding="10")
@@ -352,7 +352,7 @@ class TextureModTool:
         for i, archive_name in enumerate(known_sound_archives):
             var = tk.BooleanVar(value=True if archive_name in default_sound_archives else False)
             chk = ttk.Checkbutton(sound_archive_frame, text=archive_name, variable=var)
-            chk.grid(row=i, column=0, padx=5, pady=2, sticky="w") 
+            chk.grid(row=i, column=0, padx=5, pady=2, sticky="w")
             self.sound_archives_vars[archive_name] = var
 
         self.delete_temp_sound_unflat_var = tk.BooleanVar(value=True)
@@ -466,8 +466,10 @@ class TextureModTool:
         generate_files_button = ttk.Button(frame, text="1. Generate Mod Files (desc.addpack & .flatdata archives)", command=self.generate_mod_files)
         generate_files_button.pack(pady=5, fill=tk.X, padx=20)
         ToolTip(generate_files_button,
-                "For selected assets:\n"
-                "- Creates 'desc.addpack' in 'CORE/'.\n"
+                "First, you'll confirm/edit mod details (name, author, version).\n"
+                "Then, for selected assets:\n"
+                "- Creates 'desc.addpack' in 'CORE/' using confirmed details.\n"
+                "- Updates 'readme.txt' in the project root with confirmed details.\n"
                 "- Creates appropriate '.!flatlist' files in a temporary staging area.\n"
                 "- Copies selected asset files to the staging area.\n"
                 "- Creates '.flatdata' archives (e.g., textures.flatdata, sounds.flatdata)\n"
@@ -478,7 +480,8 @@ class TextureModTool:
         create_archive_button.pack(pady=5, fill=tk.X, padx=20)
         ToolTip(create_archive_button,
                 "Packages the 'CORE/' folder and 'readme.txt' from your Mod Project Directory\n"
-                "into a distributable .gt2extension archive file (a renamed .zip).")
+                "into a distributable .gt2extension archive file (a renamed .zip).\n"
+                "Uses the mod details currently set in the 'Project Setup' tab (which should have been confirmed via 'Generate Mod Files').")
 
     def _validate_paths(self, check_mod_project=True, check_starter=True):
         global GAME_ROOT_DIR, MOD_PROJECT_DIR, STARTER_EXE_PATH
@@ -533,12 +536,12 @@ class TextureModTool:
             MOD_PROJECT_DIR = directory
             save_config()
             log_message(self.log_area, f"Mod Project Directory set to: {MOD_PROJECT_DIR}")
-            self.initialize_mod_folders(silent=True) 
+            self.initialize_mod_folders(silent=True)
 
     def _update_readme_file(self):
         """
         Creates or updates the readme.txt file in the mod project directory
-        using the current mod information. Preserves existing description if possible.
+        using the current mod information from the StringVars. Preserves existing description if possible.
         """
         current_mod_project_dir = self.mod_project_dir_var.get()
         if not current_mod_project_dir:
@@ -546,43 +549,42 @@ class TextureModTool:
             return False
 
         readme_path = os.path.join(current_mod_project_dir, "readme.txt")
-        mod_name = self.mod_name_var.get() or "MyMod" # Fallback
-        mod_author = self.mod_author_var.get() or "Unknown Author" # Fallback
-        mod_version = self.mod_version_var.get() or "100" # Fallback
-        
-        existing_description = "Replace this with your mod's description." 
+        # Get values directly from StringVars, as they are the source of truth after confirmation
+        mod_name = self.mod_name_var.get() or "MyMod"
+        mod_author = self.mod_author_var.get() or "Unknown Author"
+        mod_version = self.mod_version_var.get() or "100"
+
+        existing_description = "Replace this with your mod's description."
 
         if os.path.exists(readme_path):
             try:
                 with open(readme_path, "r", encoding='utf-8') as f:
                     lines = f.readlines()
-                
+
                 desc_line_index = -1
                 for i, line in enumerate(lines):
                     if line.strip().lower().startswith("description:"):
                         desc_line_index = i
                         break
-                
+
                 if desc_line_index != -1 and desc_line_index + 1 < len(lines):
                     existing_description = "".join(lines[desc_line_index+1:]).strip()
-                    if not existing_description: 
+                    if not existing_description:
                         existing_description = "Replace this with your mod's description."
             except Exception as e:
                 log_message(self.log_area, f"Warning: Could not read existing readme.txt to preserve description: {e}. A new one will be created with default description.")
-        
+
         try:
             with open(readme_path, "w", encoding='utf-8') as f:
                 f.write(f"Mod: {mod_name}\n")
                 f.write(f"Author: {mod_author}\n")
                 f.write(f"Version: {mod_version}\n\n")
                 f.write("Description:\n")
-                f.write(f"{existing_description}\n") # Ensure newline at the end of description
-            log_message(self.log_area, f"readme.txt updated at: {readme_path}")
+                f.write(f"{existing_description}\n")
+            log_message(self.log_area, f"readme.txt updated at: {readme_path} with Name: {mod_name}, Author: {mod_author}, Version: {mod_version}")
             return True
         except Exception as e:
             log_message(self.log_area, f"Error updating readme.txt {readme_path}: {e}")
-            # Do not show messagebox here as this method might be called silently.
-            # The calling function should handle user notification if it's critical.
             return False
 
     def initialize_mod_folders(self, silent=False):
@@ -629,18 +631,15 @@ class TextureModTool:
                     log_message(self.log_area, f"Error creating folder {p}: {e}")
                     if not silent: messagebox.showerror("Error", f"Could not create folder {p}: {e}")
                     return False
-        
+
         readme_path = os.path.join(current_mod_project_dir, "readme.txt")
         readme_created_or_updated_now = False
-        if not os.path.exists(readme_path): # Only create if it truly doesn't exist
-            if self._update_readme_file(): 
+        if not os.path.exists(readme_path):
+            if self._update_readme_file():
                 if not silent: log_message(self.log_area, f"Created template readme.txt: {readme_path}")
                 readme_created_or_updated_now = True
             else:
                 if not silent: log_message(self.log_area, f"Failed to create readme.txt during initialization.")
-        # If readme.txt exists, initialize_mod_folders will not touch it.
-        # It's updated by create_mod_archive or if user edits it manually.
-
 
         if not created_any_folder and not readme_created_or_updated_now and not silent:
             log_message(self.log_area, "Mod project folders and readme.txt already seem to exist or no new ones needed.")
@@ -664,7 +663,7 @@ class TextureModTool:
         self.extracted_texture_listbox.delete(0, tk.END)
         all_extracted_texture_names_for_file = []
 
-        timestamp_prefix = time.strftime("%Y%m%d-%H%M%S") 
+        timestamp_prefix = time.strftime("%Y%m%d-%H%M%S")
         final_extracted_atf_base_abs = os.path.join(self.mod_project_dir_var.get(), "extracted_game_textures", "atf")
         final_extracted_dds_base_abs = os.path.join(self.mod_project_dir_var.get(), "extracted_game_textures", "dds")
         current_game_root = self.game_root_var.get()
@@ -674,7 +673,7 @@ class TextureModTool:
 
             if not os.path.exists(os.path.join(current_game_root, archive_path_rel_to_game_root)):
                 found_loc_archive = False
-                for loc_folder in ["loc_eng", "loc_rus", "loc_ger", "loc_def"]: 
+                for loc_folder in ["loc_eng", "loc_rus", "loc_ger", "loc_def"]:
                     alt_archive_path_rel = os.path.join("data", "k43t", loc_folder, "packed_data", archive_name)
                     if os.path.exists(os.path.join(current_game_root, alt_archive_path_rel)):
                         archive_path_rel_to_game_root = alt_archive_path_rel
@@ -684,11 +683,11 @@ class TextureModTool:
                 if not found_loc_archive:
                     log_message(self.log_area, f"Warning: Texture archive '{archive_name}' not found in common game data paths. Skipping.")
                     continue
-            
+
             log_message(self.log_area, f"Processing texture archive: {archive_path_rel_to_game_root}")
             archive_base_name = os.path.splitext(archive_name)[0]
-            
-            starter_unflat_output_rel = os.path.join("users", "modwork", f"_temp_unflat_tex_{archive_base_name}_{timestamp_prefix}_{get_unique_timestamp_suffix()}") 
+
+            starter_unflat_output_rel = os.path.join("users", "modwork", f"_temp_unflat_tex_{archive_base_name}_{timestamp_prefix}_{get_unique_timestamp_suffix()}")
             starter_unflat_output_abs = os.path.join(current_game_root, starter_unflat_output_rel)
             os.makedirs(os.path.dirname(starter_unflat_output_abs), exist_ok=True)
 
@@ -698,7 +697,7 @@ class TextureModTool:
                 log_message(self.log_area, f"  Failed to unpack texture archive '{archive_name}'. Output dir: {unflat_output_actual_abs}. Skipping.")
                 if os.path.exists(starter_unflat_output_abs): shutil.rmtree(starter_unflat_output_abs)
                 continue
-            
+
             log_message(self.log_area, f"  Successfully unpacked to '{unflat_output_actual_abs}'. Now converting .texture to .dds...")
             final_atf_archive_dir_in_project = os.path.join(final_extracted_atf_base_abs, archive_base_name)
             final_dds_archive_dir_in_project = os.path.join(final_extracted_dds_base_abs, archive_base_name)
@@ -712,7 +711,7 @@ class TextureModTool:
                 if item.lower().endswith(".texture"):
                     textures_in_archive_count += 1
                     src_atf_in_game_temp_abs = os.path.join(unflat_output_actual_abs, item)
-                    dest_atf_in_project_abs = os.path.join(final_atf_archive_dir_in_project, item) 
+                    dest_atf_in_project_abs = os.path.join(final_atf_archive_dir_in_project, item)
                     try:
                         shutil.copy2(src_atf_in_game_temp_abs, dest_atf_in_project_abs)
                     except Exception as e:
@@ -720,7 +719,7 @@ class TextureModTool:
                         continue
 
                     dds_filename = item.replace(".texture", ".dds")
-                    temp_dds_output_in_game_temp_rel = os.path.join(starter_unflat_output_rel, dds_filename) 
+                    temp_dds_output_in_game_temp_rel = os.path.join(starter_unflat_output_rel, dds_filename)
                     temp_dds_output_in_game_temp_abs = os.path.join(current_game_root, temp_dds_output_in_game_temp_rel)
 
                     param_src_atf_rel = os.path.relpath(src_atf_in_game_temp_abs, current_game_root)
@@ -729,23 +728,23 @@ class TextureModTool:
                     if conv_success and os.path.exists(temp_dds_output_in_game_temp_abs):
                         dest_dds_in_project_abs = os.path.join(final_dds_archive_dir_in_project, dds_filename)
                         try:
-                            shutil.copy2(temp_dds_output_in_game_temp_abs, dest_dds_in_project_abs) 
+                            shutil.copy2(temp_dds_output_in_game_temp_abs, dest_dds_in_project_abs)
                             listbox_entry = os.path.join(archive_base_name, dds_filename)
                             all_extracted_texture_names_for_file.append(listbox_entry)
                             self.extracted_texture_listbox.insert(tk.END, listbox_entry)
                             self.extracted_texture_listbox.see(tk.END)
-                            successfully_converted_atf_paths_in_project.append(dest_atf_in_project_abs) 
+                            successfully_converted_atf_paths_in_project.append(dest_atf_in_project_abs)
                         except Exception as e:
                             log_message(self.log_area, f"    Error copying converted DDS {dds_filename} to project: {e}")
                     else:
                         log_message(self.log_area, f"    Failed to convert {item} from {archive_name}. Temp DDS not found at {temp_dds_output_in_game_temp_abs}")
-            
+
             if self.delete_atf_after_extraction_var.get() and successfully_converted_atf_paths_in_project:
                 log_message(self.log_area, f"  Deleting original .texture files from {final_atf_archive_dir_in_project}...")
                 deleted_count = 0
-                for atf_to_delete in successfully_converted_atf_paths_in_project: 
+                for atf_to_delete in successfully_converted_atf_paths_in_project:
                     try:
-                        if os.path.exists(atf_to_delete): 
+                        if os.path.exists(atf_to_delete):
                            os.remove(atf_to_delete)
                            deleted_count +=1
                     except Exception as e:
@@ -798,19 +797,19 @@ class TextureModTool:
         os.makedirs(final_extracted_sounds_base_abs, exist_ok=True)
 
         current_game_root = self.game_root_var.get()
-        sound_file_extensions = (".loc_def.sound", ".sound", ".aaf") 
+        sound_file_extensions = (".loc_def.sound", ".sound", ".aaf")
 
         for archive_name in selected_sound_archives:
             archive_path_rel_to_game_root = os.path.join("data", "k43t", "shared", "packed_data", archive_name)
 
             if not os.path.exists(os.path.join(current_game_root, archive_path_rel_to_game_root)):
                 found_loc_archive = False
-                loc_folders_to_try = ["loc_eng", "loc_rus", "loc_ger", "loc_def"] 
-                if "speech" in archive_name.lower(): 
+                loc_folders_to_try = ["loc_eng", "loc_rus", "loc_ger", "loc_def"]
+                if "speech" in archive_name.lower():
                     speech_lang_part = archive_name.lower().replace(".flatdata","").replace("speech_","")
                     if speech_lang_part in ["eng", "rus", "ger"]:
                         loc_folders_to_try = [f"loc_{speech_lang_part}", "loc_def"] + loc_folders_to_try
-                    else: 
+                    else:
                         loc_folders_to_try = ["loc_def", "loc_eng", "loc_rus", "loc_ger"]
 
 
@@ -828,7 +827,7 @@ class TextureModTool:
             log_message(self.log_area, f"Processing sound archive: {archive_path_rel_to_game_root}")
             archive_base_name = os.path.splitext(archive_name)[0]
 
-            starter_unflat_output_rel = os.path.join("users", "modwork", f"_temp_unflat_sound_{archive_base_name}_{timestamp_prefix}_{get_unique_timestamp_suffix()}") 
+            starter_unflat_output_rel = os.path.join("users", "modwork", f"_temp_unflat_sound_{archive_base_name}_{timestamp_prefix}_{get_unique_timestamp_suffix()}")
             starter_unflat_output_abs = os.path.join(current_game_root, starter_unflat_output_rel)
             os.makedirs(os.path.dirname(starter_unflat_output_abs), exist_ok=True)
 
@@ -937,9 +936,9 @@ class TextureModTool:
         current_mod_project_dir = self.mod_project_dir_var.get()
         current_game_root = self.game_root_var.get()
         suggested_atf_dir = os.path.join(current_mod_project_dir, "extracted_game_textures", "atf")
-        if not os.path.isdir(suggested_atf_dir): 
-            suggested_atf_dir = os.path.join(current_game_root, "data") 
-        if not os.path.isdir(suggested_atf_dir): 
+        if not os.path.isdir(suggested_atf_dir):
+            suggested_atf_dir = os.path.join(current_game_root, "data")
+        if not os.path.isdir(suggested_atf_dir):
             suggested_atf_dir = current_game_root
 
         source_atf_files_abs = filedialog.askopenfilenames(
@@ -955,7 +954,7 @@ class TextureModTool:
             filename = os.path.basename(atf_path_abs)
             base, _ = os.path.splitext(filename)
             dds_filename = base + ".dds"
-            
+
             timestamp_suffix = get_unique_timestamp_suffix()
             temp_dds_output_base_dir_rel = os.path.join("users", "modwork", f"_temp_atf2dds_{timestamp_suffix}")
             os.makedirs(os.path.join(current_game_root, temp_dds_output_base_dir_rel), exist_ok=True)
@@ -967,7 +966,7 @@ class TextureModTool:
 
             log_message(self.log_area, f"Converting: {param_atf_path_rel} -> temp {temp_dds_output_rel}")
             conv_success, _ = run_starter_command("atf2dds", [param_atf_path_rel, temp_dds_output_rel], self.log_area)
-            
+
             if conv_success and os.path.exists(temp_dds_output_abs):
                 try:
                     shutil.move(temp_dds_output_abs, final_dds_path_abs)
@@ -975,11 +974,11 @@ class TextureModTool:
                     success_count += 1
                 except Exception as e:
                     log_message(self.log_area, f"  Error moving converted DDS {dds_filename} to {output_dds_dir_abs}: {e}")
-                    if os.path.exists(temp_dds_output_abs): os.remove(temp_dds_output_abs) 
+                    if os.path.exists(temp_dds_output_abs): os.remove(temp_dds_output_abs)
             else:
                 log_message(self.log_area, f"  Failed to convert {filename} or temp DDS not found at {temp_dds_output_abs}.")
-                if os.path.exists(temp_dds_output_abs): os.remove(temp_dds_output_abs) 
-            
+                if os.path.exists(temp_dds_output_abs): os.remove(temp_dds_output_abs)
+
             if os.path.exists(os.path.join(current_game_root, temp_dds_output_base_dir_rel)):
                 try:
                     shutil.rmtree(os.path.join(current_game_root, temp_dds_output_base_dir_rel))
@@ -1015,13 +1014,13 @@ class TextureModTool:
             os.makedirs(os.path.join(current_game_root, temp_atf_output_base_dir_rel), exist_ok=True)
             temp_atf_output_rel = os.path.join(temp_atf_output_base_dir_rel, atf_filename)
             temp_atf_output_abs = os.path.join(current_game_root, temp_atf_output_rel)
-            
+
             final_atf_path_abs = os.path.join(output_atf_dir_abs, atf_filename)
             param_dds_path_rel = os.path.relpath(dds_path_abs, current_game_root)
 
             log_message(self.log_area, f"Converting: {param_dds_path_rel} -> temp {temp_atf_output_rel}")
             conv_success, _ = run_starter_command("dds2atf", [param_dds_path_rel, temp_atf_output_rel], self.log_area)
-            
+
             if conv_success and os.path.exists(temp_atf_output_abs):
                 try:
                     shutil.move(temp_atf_output_abs, final_atf_path_abs)
@@ -1057,8 +1056,8 @@ class TextureModTool:
         final_output_dir_abs = os.path.join(current_mod_project_dir, "prepared_sounds", output_subfolder)
 
         suggested_wav_dir = os.path.join(current_mod_project_dir, f"wav_{output_subfolder}_work")
-        if not os.path.isdir(suggested_wav_dir): 
-            suggested_wav_dir = current_mod_project_dir 
+        if not os.path.isdir(suggested_wav_dir):
+            suggested_wav_dir = current_mod_project_dir
 
         source_wav_files_abs = filedialog.askopenfilenames(
             title=f"Select .wav files for {sound_category} to .loc_def.sound conversion",
@@ -1072,17 +1071,17 @@ class TextureModTool:
         for wav_path_abs in source_wav_files_abs:
             filename = os.path.basename(wav_path_abs)
             base, _ = os.path.splitext(filename)
-            target_sound_filename = base + ".loc_def.sound" 
+            target_sound_filename = base + ".loc_def.sound"
 
             timestamp_suffix = get_unique_timestamp_suffix()
             temp_output_base_dir_rel = os.path.join("users", "modwork", f"_temp_wav2aaf_{timestamp_suffix}")
             os.makedirs(os.path.join(current_game_root, temp_output_base_dir_rel), exist_ok=True)
-            temp_output_filename_rel = os.path.join(temp_output_base_dir_rel, target_sound_filename) 
+            temp_output_filename_rel = os.path.join(temp_output_base_dir_rel, target_sound_filename)
             temp_output_path_abs = os.path.join(current_game_root, temp_output_filename_rel)
-            
+
             final_sound_path_abs = os.path.join(final_output_dir_abs, target_sound_filename)
             param_wav_path_rel = os.path.relpath(wav_path_abs, current_game_root)
-            
+
             log_message(self.log_area, f"Converting: {param_wav_path_rel} -> temp {temp_output_filename_rel}")
             conv_success, _ = run_starter_command("wav2aaf", [param_wav_path_rel, temp_output_filename_rel], self.log_area)
 
@@ -1097,13 +1096,13 @@ class TextureModTool:
             else:
                 log_message(self.log_area, f"  Failed to convert {filename} or temp sound file not found at {temp_output_path_abs}.")
                 if os.path.exists(temp_output_path_abs): os.remove(temp_output_path_abs)
-            
+
             if os.path.exists(os.path.join(current_game_root, temp_output_base_dir_rel)):
                 try:
                     shutil.rmtree(os.path.join(current_game_root, temp_output_base_dir_rel))
                 except Exception as e:
                     log_message(self.log_area, f"  Warning: Could not remove temp dir {temp_output_base_dir_rel}: {e}")
-        
+
         log_message(self.log_area, f"WAV to .loc_def.sound ({sound_category}) conversion finished. {success_count}/{len(source_wav_files_abs)} successful. Files in '{final_output_dir_abs}'")
         self.load_prepared_assets()
 
@@ -1131,10 +1130,9 @@ class TextureModTool:
             log_message(self.log_area, f"Total {total_found} prepared asset files loaded. Select files to include in the mod package.")
 
     def _generate_desc_addpack_file(self, mod_name, author, version, core_dir_abs, game_root_dir):
-        # This function now uses the passed-in mod_name, author, version
-        # Ensure core_dir_abs is created if it doesn't exist, as desc.addpack goes there
+        # This function uses the passed-in mod_name, author, version
         os.makedirs(core_dir_abs, exist_ok=True)
-        
+
         stencil_dir_abs = os.path.join(game_root_dir, "docs", "modwork", "stencil")
         template_filename = "desc_example.addpack.engcfg2"
         template_path_abs = os.path.join(stencil_dir_abs, template_filename)
@@ -1152,83 +1150,82 @@ class TextureModTool:
                 log_message(self.log_area, f"Successfully read template '{template_filename}' with {enc} encoding.")
                 break
             except UnicodeDecodeError:
-                log_message(self.log_area, f"Warning: Failed to decode template '{template_filename}' with {enc} (UnicodeDecodeError). Retrying with another encoding.")
+                log_message(self.log_area, f"Warning: Failed to decode template '{template_filename}' with {enc}. Retrying.")
             except Exception as e:
-                log_message(self.log_area, f"Warning: Failed to read template '{template_filename}' with {enc}: {e}. Retrying with another encoding.")
+                log_message(self.log_area, f"Warning: Failed to read template '{template_filename}' with {enc}: {e}. Retrying.")
         if desc_engcfg2_content is None:
-            log_message(self.log_area, f"Critical Error: Could not read/decode template file '{template_filename}' after trying multiple encodings. Please check the file encoding.")
-            messagebox.showerror("Template Read Error", f"Could not read/decode addon template '{template_filename}'. Ensure it's a valid text file (UTF-8 or similar).")
+            log_message(self.log_area, f"Critical Error: Could not read/decode template '{template_filename}'.")
+            messagebox.showerror("Template Read Error", f"Could not read/decode addon template '{template_filename}'.")
             return False
-        
+
         sanitized_mod_name_for_path = re.sub(r'[^\w\s_-]', '_', mod_name).strip()
         sanitized_mod_name_for_path = re.sub(r'\s+', '_', sanitized_mod_name_for_path)
-        if not sanitized_mod_name_for_path: sanitized_mod_name_for_path = "MyMod" 
-        
-        installer_mod_path = f"mods/{sanitized_mod_name_for_path}" 
+        if not sanitized_mod_name_for_path: sanitized_mod_name_for_path = "MyMod"
+
+        installer_mod_path = f"mods/{sanitized_mod_name_for_path}"
         log_message(self.log_area, f"Setting installer path in desc.addpack to: {installer_mod_path} using Mod Name: '{mod_name}'")
-        
+
         desc_engcfg2_content = desc_engcfg2_content.replace("<my_updates>", installer_mod_path)
         desc_engcfg2_content = desc_engcfg2_content.replace("<My Addon>", mod_name)
         desc_engcfg2_content = desc_engcfg2_content.replace("<Vasya Pupkin>", author)
         desc_engcfg2_content = re.sub(r"version\[u\]\s*=\s*\d+", f"version[u] = {version}", desc_engcfg2_content)
-        
-        if "type[*] =" not in desc_engcfg2_content: 
-             desc_engcfg2_content += "\ntype[*] = RES;\n" 
+
+        if "type[*] =" not in desc_engcfg2_content:
+             desc_engcfg2_content += "\ntype[*] = RES;\n"
         elif "type[*] = ADDN" in desc_engcfg2_content or "type[*] = CAMP" in desc_engcfg2_content:
-            pass 
-        else: 
+            pass
+        else:
             desc_engcfg2_content = re.sub(r"type\[\*\]\s*=\s*\w+;", "type[*] = RES;", desc_engcfg2_content)
 
-        timestamp_suffix = get_unique_timestamp_suffix() 
+        timestamp_suffix = get_unique_timestamp_suffix()
         temp_desc_engcfg2_name = f"_temp_desc_{timestamp_suffix}.addpack.engcfg2"
         temp_desc_engcfg2_path_rel = os.path.join("users", "modwork", temp_desc_engcfg2_name)
         temp_desc_engcfg2_path_abs = os.path.join(game_root_dir, temp_desc_engcfg2_path_rel)
         os.makedirs(os.path.dirname(temp_desc_engcfg2_path_abs), exist_ok=True)
-        
+
         try:
-            with open(temp_desc_engcfg2_path_abs, "w", encoding='utf-8') as f: 
+            with open(temp_desc_engcfg2_path_abs, "w", encoding='utf-8') as f:
                 f.write(desc_engcfg2_content)
         except Exception as e:
             log_message(self.log_area, f"Error writing temporary desc file '{temp_desc_engcfg2_path_abs}': {e}")
             return False
 
         final_desc_addpack_path_abs = os.path.join(core_dir_abs, "desc.addpack")
-        temp_desc_addpack_output_name = f"_temp_desc_{timestamp_suffix}.addpack" 
+        temp_desc_addpack_output_name = f"_temp_desc_{timestamp_suffix}.addpack"
         temp_desc_addpack_output_rel = os.path.join("users", "modwork", temp_desc_addpack_output_name)
         temp_desc_addpack_output_abs = os.path.join(game_root_dir, temp_desc_addpack_output_rel)
 
         log_message(self.log_area, "Generating desc.addpack...")
         gen_success, _ = run_starter_command("pd2cfgp", [temp_desc_engcfg2_path_rel, temp_desc_addpack_output_rel], self.log_area)
-        
+
         if os.path.exists(temp_desc_engcfg2_path_abs):
             try: os.remove(temp_desc_engcfg2_path_abs)
             except Exception as e_rm: log_message(self.log_area, f"Warning: Could not remove temp file {temp_desc_engcfg2_path_abs}: {e_rm}")
 
         if not gen_success or not os.path.exists(temp_desc_addpack_output_abs):
             log_message(self.log_area, "Error generating desc.addpack or temp output not found.")
-            if os.path.exists(temp_desc_addpack_output_abs): os.remove(temp_desc_addpack_output_abs) 
+            if os.path.exists(temp_desc_addpack_output_abs): os.remove(temp_desc_addpack_output_abs)
             return False
-        
+
         try:
-            # Ensure the target directory exists before moving
             os.makedirs(os.path.dirname(final_desc_addpack_path_abs), exist_ok=True)
             shutil.move(temp_desc_addpack_output_abs, final_desc_addpack_path_abs)
             log_message(self.log_area, f"desc.addpack created/updated at {final_desc_addpack_path_abs}")
             return True
         except Exception as e:
             log_message(self.log_area, f"Error moving generated desc.addpack to project: {e}")
-            if os.path.exists(temp_desc_addpack_output_abs): os.remove(temp_desc_addpack_output_abs) 
+            if os.path.exists(temp_desc_addpack_output_abs): os.remove(temp_desc_addpack_output_abs)
             return False
 
     def _package_asset_archive(self, flatlist_name_stem, mkflat_file_type,
                                files_to_package, game_root_dir, core_dir_abs):
         if not files_to_package:
             log_message(self.log_area, f"No files provided for packaging into {flatlist_name_stem}.flatdata. Skipping.")
-            return True 
-        
+            return True
+
         log_message(self.log_area, f"Packaging {len(files_to_package)} assets into {flatlist_name_stem}.flatdata...")
-        
-        mkflat_staging_dir_name = f"_mkflat_stage_{flatlist_name_stem}_{get_unique_timestamp_suffix()}" 
+
+        mkflat_staging_dir_name = f"_mkflat_stage_{flatlist_name_stem}_{get_unique_timestamp_suffix()}"
         mkflat_staging_dir_rel = os.path.join("users", "modwork", mkflat_staging_dir_name)
         mkflat_staging_dir_abs = os.path.join(game_root_dir, mkflat_staging_dir_rel)
         os.makedirs(mkflat_staging_dir_abs, exist_ok=True)
@@ -1243,8 +1240,8 @@ class TextureModTool:
             elif flatlist_entry_name.lower().endswith(".texture"):
                 flatlist_entry_name = flatlist_entry_name[:-len(".texture")]
 
-            flatlist_content += f"    {flatlist_entry_name}\t, {mkflat_file_type}\t, loc_def ;\n" 
-            
+            flatlist_content += f"    {flatlist_entry_name}\t, {mkflat_file_type}\t, loc_def ;\n"
+
             dst_asset_for_mkflat_path_abs = os.path.join(mkflat_staging_dir_abs, staging_filename)
             if os.path.exists(abs_src_path_in_project):
                 try:
@@ -1252,24 +1249,24 @@ class TextureModTool:
                     assets_copied_for_mkflat.append(dst_asset_for_mkflat_path_abs)
                 except Exception as e:
                     log_message(self.log_area, f"Error copying {staging_filename} from {abs_src_path_in_project} to mkflat staging {dst_asset_for_mkflat_path_abs}: {e}")
-                    if os.path.exists(mkflat_staging_dir_abs): shutil.rmtree(mkflat_staging_dir_abs) 
+                    if os.path.exists(mkflat_staging_dir_abs): shutil.rmtree(mkflat_staging_dir_abs)
                     return False
             else:
                 log_message(self.log_area, f"Warning: Source asset {abs_src_path_in_project} not found for copying. Skipping this file for {flatlist_name_stem}.flatdata.")
-                continue 
+                continue
 
-        if not assets_copied_for_mkflat: 
+        if not assets_copied_for_mkflat:
             log_message(self.log_area, f"No valid asset files were found to copy for {flatlist_name_stem}.flatdata. Skipping archive creation.")
             if os.path.exists(mkflat_staging_dir_abs): shutil.rmtree(mkflat_staging_dir_abs)
-            return True 
+            return True
 
         flatlist_content += "}\n"
-        flatlist_filename_for_mkflat = f"{flatlist_name_stem}.!flatlist" 
+        flatlist_filename_for_mkflat = f"{flatlist_name_stem}.!flatlist"
         flatlist_path_in_staging_abs = os.path.join(mkflat_staging_dir_abs, flatlist_filename_for_mkflat)
         flatlist_path_in_staging_rel = os.path.relpath(flatlist_path_in_staging_abs, game_root_dir)
-        
+
         try:
-            with open(flatlist_path_in_staging_abs, "w", encoding='utf-8') as f: 
+            with open(flatlist_path_in_staging_abs, "w", encoding='utf-8') as f:
                 f.write(flatlist_content)
         except Exception as e:
             log_message(self.log_area, f"Error writing {flatlist_filename_for_mkflat} to staging: {e}")
@@ -1278,15 +1275,15 @@ class TextureModTool:
 
         flatdata_output_in_staging_rel = os.path.join(mkflat_staging_dir_rel, f"{flatlist_name_stem}.flatdata")
         flatdata_output_in_staging_abs = os.path.join(game_root_dir, flatdata_output_in_staging_rel)
-        
+
         final_flatdata_target_in_project_abs = os.path.join(core_dir_abs, "shared", "packed_data", f"{flatlist_name_stem}.flatdata")
-        
+
         mk_success, _ = run_starter_command("mkflat", [flatdata_output_in_staging_rel, flatlist_path_in_staging_rel], self.log_area)
-        
+
         if not mk_success or not os.path.exists(flatdata_output_in_staging_abs):
             log_message(self.log_area, f"Error generating {flatlist_name_stem}.flatdata or output not found in staging at {flatdata_output_in_staging_abs}.")
             return False
-        
+
         try:
             os.makedirs(os.path.dirname(final_flatdata_target_in_project_abs), exist_ok=True)
             shutil.move(flatdata_output_in_staging_abs, final_flatdata_target_in_project_abs)
@@ -1305,76 +1302,81 @@ class TextureModTool:
 
     def generate_mod_files(self):
         if not self._validate_paths(check_mod_project=True): return
-        if not self.initialize_mod_folders(silent=True): 
+        if not self.initialize_mod_folders(silent=True):
             log_message(self.log_area, "Failed to initialize mod project folders for packaging.")
             return
 
-        # Use current values from StringVars for this step
+        # --- MODIFIED WORKFLOW: Confirm details FIRST ---
+        log_message(self.log_area, "Requesting confirmation of Mod Details before generating files...")
+        confirmed_details = self._confirm_mod_details_dialog(
+            title="Confirm/Edit Mod Details for File Generation",
+            confirm_button_text="Confirm & Generate Files"
+        )
+
+        if not confirmed_details:
+            log_message(self.log_area, "Mod file generation cancelled by user at detail confirmation step.")
+            return
+        log_message(self.log_area, "Mod details confirmed. Proceeding with file generation.")
+
+        # Details are now set in self.mod_name_var, self.mod_author_var, self.mod_version_var
+        # by the _confirm_mod_details_dialog method.
+
         mod_name_val = self.mod_name_var.get()
         mod_author_val = self.mod_author_var.get()
         mod_version_val = self.mod_version_var.get()
 
-        if not all([mod_name_val, mod_author_val, mod_version_val]):
-            messagebox.showerror("Error", "Mod Name, Author, and Version must be set in the 'Project Setup' tab.")
-            log_message(self.log_area, "Error: Mod Name, Author, or Version not set in Project Setup for generating mod files.")
-            return
-        
+        # Update readme.txt with the confirmed/edited mod information.
+        if not self._update_readme_file():
+            log_message(self.log_area, "Warning: Failed to update readme.txt with confirmed details. Proceeding with other file generation.")
+            # Optionally, ask user if they want to proceed if readme update is critical
+            # if not messagebox.askyesno("Readme Update Failed", "Failed to update readme.txt. Do you want to continue generating other mod files?"):
+            #     return
+
         selected_indices = self.packaged_assets_listbox.curselection()
-        if not selected_indices:
-            if messagebox.askyesno("No Assets Selected", 
-                                   "No asset files are selected from the list to package into .flatdata archives.\n"
-                                   "Do you want to proceed with generating only the desc.addpack file?"):
-                log_message(self.log_area, "User chose to generate only desc.addpack as no assets were selected.")
-                selected_asset_filenames_with_prefix = [] 
-            else:
-                log_message(self.log_area, "Mod file generation cancelled by user as no assets were selected and desc.addpack only was declined.")
-                return
-        else:
-            selected_asset_filenames_with_prefix = [self.packaged_assets_listbox.get(i) for i in selected_indices]
+        selected_asset_filenames_with_prefix = [self.packaged_assets_listbox.get(i) for i in selected_indices]
 
         current_mod_project_dir = self.mod_project_dir_var.get()
         current_game_root = self.game_root_var.get()
         core_dir_abs = os.path.join(current_mod_project_dir, "CORE")
-        os.makedirs(core_dir_abs, exist_ok=True) 
+        os.makedirs(core_dir_abs, exist_ok=True)
 
-        # Generate desc.addpack using current Setup Tab values
+        # Generate desc.addpack using the confirmed mod_name_val, mod_author_val, mod_version_val
         if not self._generate_desc_addpack_file(mod_name_val, mod_author_val, mod_version_val, core_dir_abs, current_game_root):
             messagebox.showerror("Error", "Failed to generate desc.addpack. Check log.")
-            return 
+            return
 
         all_archives_successful = True
         archives_packaged_count = 0
 
-        if not selected_asset_filenames_with_prefix: 
-            log_message(self.log_area, "desc.addpack generated. No assets were selected for .flatdata archives.")
-            messagebox.showinfo("desc.addpack Generated", "desc.addpack generated. No assets were selected to package into .flatdata archives.")
+        if not selected_asset_filenames_with_prefix:
+            log_message(self.log_area, "desc.addpack and readme.txt updated with confirmed details. No assets were selected for .flatdata archives.")
+            messagebox.showinfo("Files Generated", "desc.addpack and readme.txt updated with confirmed details. No assets were selected to package into .flatdata archives.")
             return
-
 
         for flatlist_stem, definition in self.flatdata_definitions.items():
             mkflat_type = definition["mkflat_type"]
             files_for_this_flatdata_archive = []
-            
+
             for source_config in definition["sources"]:
-                prefix_to_match = source_config["prefix"] + " " 
+                prefix_to_match = source_config["prefix"] + " "
                 source_folder_abs_in_project = os.path.join(current_mod_project_dir, source_config["folder"])
-                
+
                 for selected_file_with_prefix in selected_asset_filenames_with_prefix:
                     if selected_file_with_prefix.startswith(prefix_to_match):
                         asset_filename = selected_file_with_prefix.split(prefix_to_match, 1)[1]
                         original_asset_path_abs_in_project = os.path.join(source_folder_abs_in_project, asset_filename)
-                        
+
                         if os.path.exists(original_asset_path_abs_in_project):
                             files_for_this_flatdata_archive.append(
-                                (original_asset_path_abs_in_project, asset_filename) 
+                                (original_asset_path_abs_in_project, asset_filename)
                             )
                         else:
                             log_message(self.log_area, f"Warning: Selected asset '{asset_filename}' not found at '{original_asset_path_abs_in_project}'. Skipping for {flatlist_stem}.flatdata.")
-                            all_archives_successful = False 
+                            all_archives_successful = False
 
             if files_for_this_flatdata_archive:
                 success = self._package_asset_archive(
-                    flatlist_name_stem=flatlist_stem, 
+                    flatlist_name_stem=flatlist_stem,
                     mkflat_file_type=mkflat_type,
                     files_to_package=files_for_this_flatdata_archive,
                     game_root_dir=current_game_root,
@@ -1385,39 +1387,45 @@ class TextureModTool:
                 else:
                     all_archives_successful = False
                     log_message(self.log_area, f"Failed to package {flatlist_stem}.flatdata.")
-        
-        if archives_packaged_count == 0 and any(selected_asset_filenames_with_prefix):
-             log_message(self.log_area, "desc.addpack generated. However, no asset archives were created. This might be due to missing source files or incorrect prefixes for selected items.")
-             messagebox.showwarning("Packaging Issue", "desc.addpack generated. No .flatdata archives were created. Check log for details on missing files or prefix mismatches.")
-        elif all_archives_successful and archives_packaged_count > 0:
-            log_message(self.log_area, "All selected mod files generated successfully in CORE directory.")
-            messagebox.showinfo("Success", "Mod files (desc.addpack and selected .flatdata archives) generated successfully!")
-        elif archives_packaged_count > 0 : 
-            log_message(self.log_area, "desc.addpack and some .flatdata archives generated, but errors occurred with others (e.g., missing files). Check log.")
-            messagebox.showwarning("Partial Success", "desc.addpack and some .flatdata archives generated, but errors occurred. Check log for details.")
-        elif not all_archives_successful and archives_packaged_count == 0 and any(selected_asset_filenames_with_prefix):
-            log_message(self.log_area, "desc.addpack generated, but failed to generate any .flatdata archives due to errors (e.g. all selected files missing). Check log.")
-            messagebox.showerror("Error", "desc.addpack generated, but failed to create any .flatdata archives. Check log for details.")
 
-    def _confirm_mod_details_dialog(self):
-        self.confirmation_result = False 
+        if archives_packaged_count == 0 and any(selected_asset_filenames_with_prefix):
+             log_message(self.log_area, "desc.addpack and readme.txt updated. However, no asset archives were created. This might be due to missing source files or incorrect prefixes for selected items.")
+             messagebox.showwarning("Packaging Issue", "desc.addpack and readme.txt updated. No .flatdata archives were created. Check log for details on missing files or prefix mismatches.")
+        elif all_archives_successful and archives_packaged_count > 0:
+            log_message(self.log_area, "All selected mod files generated successfully in CORE directory (including updated desc.addpack and readme.txt).")
+            messagebox.showinfo("Success", "Mod files (desc.addpack, readme.txt, and selected .flatdata archives) generated successfully with confirmed details!")
+        elif archives_packaged_count > 0 :
+            log_message(self.log_area, "desc.addpack and readme.txt updated. Some .flatdata archives generated, but errors occurred with others (e.g., missing files). Check log.")
+            messagebox.showwarning("Partial Success", "desc.addpack and readme.txt updated. Some .flatdata archives generated, but errors occurred. Check log for details.")
+        elif not all_archives_successful and archives_packaged_count == 0 and any(selected_asset_filenames_with_prefix):
+            log_message(self.log_area, "desc.addpack and readme.txt updated, but failed to generate any .flatdata archives due to errors (e.g. all selected files missing). Check log.")
+            messagebox.showerror("Error", "desc.addpack and readme.txt updated, but failed to create any .flatdata archives. Check log for details.")
+
+    def _confirm_mod_details_dialog(self, title="Confirm Mod Details", confirm_button_text="Confirm"):
+        """
+        Displays a dialog to confirm or edit mod details.
+        Updates self.mod_name_var, self.mod_author_var, self.mod_version_var if confirmed.
+        Returns True if confirmed, False if cancelled.
+        """
+        self.confirmation_result = False # Reset before showing dialog
 
         dialog = tk.Toplevel(self.root)
-        dialog.title("Confirm Mod Details for Archive")
-        dialog.transient(self.root)  
-        dialog.grab_set()  
+        dialog.title(title)
+        dialog.transient(self.root)
+        dialog.grab_set()
         dialog.resizable(False, False)
-        dialog.attributes("-toolwindow", True) 
+        dialog.attributes("-toolwindow", True)
 
         main_frame = ttk.Frame(dialog, padding="15 15 15 15")
         main_frame.pack(expand=True, fill="both")
 
-        ttk.Label(main_frame, text="Please review and confirm/edit the following details for your mod archive:",
+        ttk.Label(main_frame, text="Please review and confirm/edit the following mod details:",
                   wraplength=380, justify=tk.LEFT).grid(row=0, column=0, columnspan=2, pady=(0, 15), sticky="w")
 
         details_frame = ttk.Frame(main_frame)
         details_frame.grid(row=1, column=0, columnspan=2, pady=(0,15), sticky="ew")
 
+        # Use temporary StringVars for the dialog to not affect main ones unless confirmed
         dialog_mod_name_var = tk.StringVar(value=self.mod_name_var.get())
         dialog_mod_author_var = tk.StringVar(value=self.mod_author_var.get())
         dialog_mod_version_var = tk.StringVar(value=self.mod_version_var.get())
@@ -1433,77 +1441,62 @@ class TextureModTool:
         ttk.Label(details_frame, text="Version:", font=("Segoe UI", 9, "bold")).grid(row=2, column=0, padx=5, pady=3, sticky="e")
         mod_version_entry = ttk.Entry(details_frame, textvariable=dialog_mod_version_var, width=15)
         mod_version_entry.grid(row=2, column=1, padx=5, pady=3, sticky="w")
-        
+
         details_frame.grid_columnconfigure(1, weight=1)
 
-
         def on_confirm():
-            self.mod_name_var.set(dialog_mod_name_var.get() or "MyMod") 
+            # Update the main StringVars with values from the dialog
+            self.mod_name_var.set(dialog_mod_name_var.get() or "MyMod")
             self.mod_author_var.set(dialog_mod_author_var.get() or "Modder")
             self.mod_version_var.set(dialog_mod_version_var.get() or "100")
-            
+            log_message(self.log_area, f"Mod details confirmed/updated in UI: Name='{self.mod_name_var.get()}', Author='{self.mod_author_var.get()}', Version='{self.mod_version_var.get()}'")
             self.confirmation_result = True
             dialog.destroy()
 
         def on_cancel():
-            self.confirmation_result = False 
+            self.confirmation_result = False
             dialog.destroy()
 
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=2, column=0, columnspan=2, pady=(10, 0), sticky="e")
 
-        confirm_button = ttk.Button(button_frame, text="Confirm & Create Archive", command=on_confirm, style="Accent.TButton")
+        confirm_button = ttk.Button(button_frame, text=confirm_button_text, command=on_confirm, style="Accent.TButton")
         confirm_button.pack(side=tk.RIGHT, padx=(10,0))
-        ToolTip(confirm_button, "Proceed with creating the .gt2extension archive using these details.")
-        
+        ToolTip(confirm_button, "Proceed using these details.")
+
         cancel_button = ttk.Button(button_frame, text="Cancel", command=on_cancel)
         cancel_button.pack(side=tk.RIGHT, padx=(0,5))
-        ToolTip(cancel_button, "Cancel archive creation and return to the tool.")
+        ToolTip(cancel_button, "Cancel this operation.")
 
         s = ttk.Style()
         s.configure("Accent.TButton", font=("Segoe UI", 9, "bold"))
 
-        dialog.protocol("WM_DELETE_WINDOW", on_cancel)  
-        mod_name_entry.focus_set() 
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        mod_name_entry.focus_set()
 
-        dialog.update_idletasks() 
+        dialog.update_idletasks()
         parent_x = self.root.winfo_x()
         parent_y = self.root.winfo_y()
         parent_width = self.root.winfo_width()
         parent_height = self.root.winfo_height()
-
         dialog_width = dialog.winfo_width()
         dialog_height = dialog.winfo_height()
-        
-        if parent_width < dialog_width or parent_height < dialog_height or parent_x < 0 or parent_y < 0: 
+        if parent_width < dialog_width or parent_height < dialog_height or parent_x < 0 or parent_y < 0:
             x = (self.root.winfo_screenwidth() // 2) - (dialog_width // 2)
             y = (self.root.winfo_screenheight() // 2) - (dialog_height // 2)
         else:
             x = parent_x + (parent_width // 2) - (dialog_width // 2)
             y = parent_y + (parent_height // 2) - (dialog_height // 2)
-        
         dialog.geometry(f'{dialog_width}x{dialog_height}+{x}+{y}')
-        
-        self.root.wait_window(dialog)  
 
+        self.root.wait_window(dialog)
         return self.confirmation_result
 
     def create_mod_archive(self):
         if not self._validate_paths(check_mod_project=True, check_starter=False): return
-        
-        # Initial check for Mod Name before showing dialog
-        if not self.mod_name_var.get():
-            messagebox.showerror("Error", "Mod Name (from Project Setup tab) must be set to create an archive.")
-            log_message(self.log_area, "Error: Mod Name must be set for archive creation.")
-            return
 
-        # Show confirmation dialog, which updates self.mod_name_var, etc.
-        confirmed = self._confirm_mod_details_dialog()
-        if not confirmed: 
-            log_message(self.log_area, "Mod archive creation cancelled by user.")
-            return
-
-        # Get the (potentially updated) values from the StringVars
+        # --- MODIFIED WORKFLOW: Details are assumed to be confirmed by "Generate Mod Files" ---
+        # Get the current values from the StringVars (Project Setup tab)
         current_mod_name = self.mod_name_var.get()
         current_mod_author = self.mod_author_var.get()
         current_mod_version = self.mod_version_var.get()
@@ -1511,42 +1504,44 @@ class TextureModTool:
         current_game_root = self.game_root_var.get()
         core_dir_abs = os.path.join(current_mod_project_dir, "CORE")
 
-        # --- CRITICAL CHANGE: Re-generate desc.addpack with confirmed details ---
-        log_message(self.log_area, "Re-generating desc.addpack with confirmed/edited details for archive...")
-        if not self._generate_desc_addpack_file(current_mod_name, current_mod_author, current_mod_version, core_dir_abs, current_game_root):
-            messagebox.showerror("Error", "Failed to update desc.addpack with confirmed details. Archive creation aborted. Check log.")
-            log_message(self.log_area, "Failed to update desc.addpack with confirmed details. Archive creation aborted.")
+        if not all([current_mod_name, current_mod_author, current_mod_version]):
+            messagebox.showerror("Error", "Mod Name, Author, and Version must be set in the 'Project Setup' tab. Please use 'Generate Mod Files' to set/confirm them first.")
+            log_message(self.log_area, "Error: Mod Name, Author, or Version not set. Cannot create archive.")
             return
-        log_message(self.log_area, "desc.addpack successfully updated for archive.")
 
-        # Update readme.txt with the confirmed details
+        log_message(self.log_area, f"Creating archive with details: Name='{current_mod_name}', Author='{current_mod_author}', Version='{current_mod_version}'")
+
+        # Re-generate desc.addpack and readme.txt to ensure they reflect the current UI values before packaging
+        log_message(self.log_area, "Ensuring desc.addpack is up-to-date for archive...")
+        if not self._generate_desc_addpack_file(current_mod_name, current_mod_author, current_mod_version, core_dir_abs, current_game_root):
+            messagebox.showerror("Error", "Failed to update desc.addpack with current details. Archive creation aborted. Check log.")
+            log_message(self.log_area, "Failed to update desc.addpack. Archive creation aborted.")
+            return
+
+        log_message(self.log_area, "Ensuring readme.txt is up-to-date for archive...")
         if not self._update_readme_file():
-            # This will log and show an error if it fails, but we might still want to proceed with archiving
-            # if desc.addpack was successful, as readme is less critical for game function.
-            # For now, let's make it a critical failure to ensure consistency.
-            messagebox.showerror("Readme Error", "Failed to update readme.txt with confirmed details. Archive creation aborted. Check log.")
+            messagebox.showerror("Readme Error", "Failed to update readme.txt with current details. Archive creation aborted. Check log.")
             log_message(self.log_area, "Failed to update readme.txt. Archive creation aborted.")
             return
-        
-        # Sanitize mod_name_val for the archive filename
+
+        # Sanitize mod_name for the archive filename
         mod_name_for_archive = re.sub(r'[^\w\s_-]', '_', current_mod_name).strip()
         mod_name_for_archive = re.sub(r'\s+', '_', mod_name_for_archive)
-        if not mod_name_for_archive: mod_name_for_archive = "MyMod" 
+        if not mod_name_for_archive: mod_name_for_archive = "MyMod"
 
-        readme_file_to_archive = os.path.join(current_mod_project_dir, "readme.txt") 
+        readme_file_to_archive = os.path.join(current_mod_project_dir, "readme.txt")
 
-        # Check if CORE/desc.addpack exists (it should have been just created/updated)
         if not os.path.isdir(core_dir_abs) or not os.path.exists(os.path.join(core_dir_abs,"desc.addpack")):
-            messagebox.showerror("Error", "CORE directory or desc.addpack not found even after attempting update. Archive creation aborted.")
-            log_message(self.log_area, "Error: CORE/desc.addpack not found after update attempt. Archive creation aborted.")
+            messagebox.showerror("Error", "CORE directory or desc.addpack not found. Please run 'Generate Mod Files' first. Archive creation aborted.")
+            log_message(self.log_area, "Error: CORE/desc.addpack not found. Archive creation aborted.")
             return
-        
+
         initial_save_dir = os.path.dirname(current_mod_project_dir) if current_mod_project_dir and os.path.dirname(current_mod_project_dir) else (current_mod_project_dir or os.getcwd())
-        
+
         archive_save_path = filedialog.asksaveasfilename(
             title="Save Mod Archive As",
             initialdir=initial_save_dir,
-            initialfile=f"{mod_name_for_archive}.gt2extension", 
+            initialfile=f"{mod_name_for_archive}.gt2extension",
             defaultextension=".gt2extension",
             filetypes=[("Graviteam Mod Archive", "*.gt2extension"), ("Zip files", "*.zip")]
         )
@@ -1557,31 +1552,31 @@ class TextureModTool:
 
         if not archive_save_path.lower().endswith(".gt2extension"):
             archive_save_path = os.path.splitext(archive_save_path)[0] + ".gt2extension"
-        
+
         temp_zip_base_name = os.path.join(os.path.dirname(archive_save_path), f"_temp_archive_{get_unique_timestamp_suffix()}")
-        
+
         staging_dir = None
-        created_zip_file_path = None 
+        created_zip_file_path = None
 
         try:
-            staging_dir = os.path.join(current_mod_project_dir, f"_archive_staging_{get_unique_timestamp_suffix()}") 
-            if os.path.exists(staging_dir): shutil.rmtree(staging_dir) 
+            staging_dir = os.path.join(current_mod_project_dir, f"_archive_staging_{get_unique_timestamp_suffix()}")
+            if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
             os.makedirs(staging_dir)
 
-            shutil.copytree(core_dir_abs, os.path.join(staging_dir, "CORE")) # CORE now contains updated desc.addpack
-            if os.path.exists(readme_file_to_archive): 
+            shutil.copytree(core_dir_abs, os.path.join(staging_dir, "CORE"))
+            if os.path.exists(readme_file_to_archive):
                 shutil.copy2(readme_file_to_archive, os.path.join(staging_dir, "readme.txt"))
             else:
-                log_message(self.log_area, "Warning: readme.txt was not found in project dir during packaging (this shouldn't happen if update was successful).")
+                log_message(self.log_area, "Warning: readme.txt was not found in project dir during packaging.")
 
-            created_zip_file_path = shutil.make_archive(base_name=temp_zip_base_name, 
+            created_zip_file_path = shutil.make_archive(base_name=temp_zip_base_name,
                                                         format='zip',
-                                                        root_dir=staging_dir) 
+                                                        root_dir=staging_dir)
 
             if os.path.exists(archive_save_path):
-                os.remove(archive_save_path) 
+                os.remove(archive_save_path)
             shutil.move(created_zip_file_path, archive_save_path)
-            
+
             log_message(self.log_area, f"Mod archive created: {archive_save_path}")
             messagebox.showinfo("Success", f"Mod archive (.gt2extension) created:\n{archive_save_path}")
 
@@ -1595,7 +1590,7 @@ class TextureModTool:
                     log_message(self.log_area, f"Cleaned up staging directory: {staging_dir}")
                 except Exception as e_rm:
                     log_message(self.log_area, f"Warning: Could not remove staging directory {staging_dir}: {e_rm}")
-            
+
             if created_zip_file_path and os.path.exists(created_zip_file_path) and created_zip_file_path != archive_save_path:
                 try:
                     os.remove(created_zip_file_path)
