@@ -1,4 +1,4 @@
-# Gravitool - User Manual V1.0.0
+# Gravitool - User Manual V1.0.0 - Currently Only Supports GTOS
 
 Welcome to the Graviteam Asset Mod Tool! This guide will help you get started with extracting game assets, preparing your own modded assets, and packaging them into a distributable mod.
 
