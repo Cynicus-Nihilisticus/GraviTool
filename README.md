@@ -144,4 +144,13 @@ Once you have prepared all your modded assets (textures in `prepared_textures/`,
 **Log Window:**
 * At the bottom of the tool, there's a Log window. It displays messages about what the tool is doing, including any errors or warnings. Check this if something doesn't seem to work as expected.
 
+## Disclaimer
+
+GraviTool is an unofficial third-party tool designed to be used with Graviteam Tactics:Operation Star (GTOS) series games and their accompanying modding utilities (e.g., `starter.exe`).
+
+* You must own a legitimate copy of the relevant Graviteam game to use this tool effectively with game assets.
+* This tool does not distribute any copyrighted game files or proprietary game utilities.
+* The use of Graviteam's `starter.exe` and other game assets is subject to Graviteam's End User License Agreement (EULA) and terms of service. Users are responsible for complying with these terms.
+* The GraviTool is provided "as is", without warranty of any kind. The author is not responsible for any damage or issues that may arise from its use.
+
 That's it! You now have a basic understanding of how to use Gravitool. Happy modding!
