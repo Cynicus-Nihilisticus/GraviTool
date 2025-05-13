@@ -182,7 +182,7 @@ def log_message(log_area_widget, message):
 class TextureModTool:
     def __init__(self, root_window):
         self.root = root_window
-        self.root.title("Gravitool - V1.1.0") # Updated Title
+        self.root.title("Gravitool - V1.1.1") # Updated Title
         self.root.geometry("950x900")
 
         # Apply a modern theme
@@ -475,7 +475,7 @@ class TextureModTool:
         delete_temp_chk = ttk.Checkbutton(frame, text="Delete temporary unpack folder after extraction",
                                           variable=self.delete_temp_config_unflat_var)
         delete_temp_chk.pack(pady=(5,0), anchor="w", padx=20)
-        ToolTip(delete_temp_chk, "If checked, the temporary folder created by 'unflat' in the game directory\nwill be deleted after config files are converted and copied to your mod project.")
+        ToolTip(delete_temp_chk, "If checked, the temporary folder created by 'unflFat' in the game directory\nwill be deleted after config files are converted and copied to your mod project.")
 
         # Button to start config extraction and conversion
         extract_config_button = ttk.Button(frame, text="Unpack 'tabs.flatdata' & Convert .config to .engcfg2", command=self.extract_and_convert_game_configs)
@@ -1686,7 +1686,7 @@ class TextureModTool:
 
             # The flatlist format seems to be: "filename_without_ext",", type",", local;"
             # Assuming 'loc_def' is standard for most mod assets unless specified otherwise.
-            flatlist_content += f"    \"{flatlist_entry_name}\"\t, {mkflat_file_type}\t, loc_def ;\n" # Add entry to flatlist, quoting filename
+            flatlist_content += f"    {flatlist_entry_name}\t, {mkflat_file_type}\t, loc_def ;\n" # Add entry to flatlist
 
             # Copy asset from mod's 'prepared_...' folder to the staging directory
             dst_asset_for_mkflat_path_abs = os.path.join(mkflat_staging_dir_abs, staging_filename)
