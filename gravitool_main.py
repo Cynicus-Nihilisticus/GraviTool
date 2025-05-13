@@ -23,7 +23,7 @@ class ToolTip:
         # Displays the tooltip window near the widget.
         if self.tooltip_window or not self.text:
             return
-        
+
         # Calculate tooltip position
         x = self.widget.winfo_rootx()
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
@@ -107,12 +107,12 @@ def run_starter_command(command_name, params_list, log_area_widget, timeout=120)
     """
     Executes a command using the game's starter.exe utility.
     Args:
-        command_name (str): The command to run (e.g., "unflat", "atf2dds").
+        command_name (str): The command to run (e.g., "unflat", "atf2dds", "cfgp2pd").
         params_list (list): A list of parameters for the command.
         log_area_widget (tk.Text): The text widget used for logging output.
         timeout (int): Maximum time in seconds to wait for the command to complete.
     Returns:
-        tuple: (bool, str_or_None) where bool indicates success, 
+        tuple: (bool, str_or_None) where bool indicates success,
                and str_or_None is the output path if relevant (e.g., for "unflat").
     """
     if not STARTER_EXE_PATH or not os.path.exists(STARTER_EXE_PATH):
@@ -126,6 +126,8 @@ def run_starter_command(command_name, params_list, log_area_widget, timeout=120)
     cmd_string_part = f"{command_name}"
     if params_list:
         # Join parameters with commas, handling None values
+        # Ensure paths with spaces are handled if necessary, though starter.exe might handle comma separation ok.
+        # For safety, let's assume starter.exe handles paths correctly after the comma separation.
         params_str = ','.join(map(lambda p: str(p) if p is not None else "", params_list))
         cmd_string_part += f",{params_str}"
 
@@ -151,8 +153,12 @@ def run_starter_command(command_name, params_list, log_area_widget, timeout=120)
             log_message(log_area_widget, f"Command failed with return code {process.returncode}")
             return False, None
         # Specific handling for "unflat" command to return the output directory
+        # The output path is the second parameter (index 1) for unflat.
         if command_name == "unflat" and len(params_list) > 1 and params_list[1]:
-             return True, os.path.join(GAME_ROOT_DIR, params_list[1]) # params_list[1] is the output path for unflat
+             # The output path provided to unflat is relative to GAME_ROOT_DIR
+             return True, os.path.join(GAME_ROOT_DIR, params_list[1])
+        # For other commands like cfgp2pd, success is indicated by return code 0.
+        # The output path is determined by the parameters passed, not returned by the command itself.
         return True, None
     except subprocess.TimeoutExpired:
         log_message(log_area_widget, "Error: Command timed out.")
@@ -176,12 +182,12 @@ def log_message(log_area_widget, message):
 class TextureModTool:
     def __init__(self, root_window):
         self.root = root_window
-        self.root.title("Gravitool - V1.0.0") # Updated Title
+        self.root.title("Gravitool - V1.1.0") # Updated Title
         self.root.geometry("950x900")
 
         # Apply a modern theme
         style = ttk.Style()
-        style.theme_use('clam') 
+        style.theme_use('clam')
 
         # --- Log Area Setup ---
         # Frame for the log area at the bottom
@@ -256,6 +262,7 @@ class TextureModTool:
                     {"prefix": "[SPE]", "folder": os.path.join("prepared_sounds", "speech"), "ext": ".loc_def.sound"}
                 ]
             }
+            # Config files are not typically packaged back this way, so no entry here yet.
         }
         # List of asset types to scan for in 'prepared_...' folders
         self.asset_types_to_scan = []
@@ -311,11 +318,11 @@ class TextureModTool:
         init_folders_button = ttk.Button(frame, text="Initialize/Verify Mod Project Folders", command=self.initialize_mod_folders)
         init_folders_button.grid(row=4, column=0, columnspan=3, pady=10)
         ToolTip(init_folders_button,
-                "Creates standard subfolders for textures, sounds (SFX/Speech), etc.,\n"
+                "Creates standard subfolders for textures, sounds (SFX/Speech), configs, etc.,\n"
                 "within your Mod Project Directory and a template readme.txt if they don't exist.")
 
     def create_asset_extractor_tab(self, parent_tab_frame):
-        """Creates the UI for the 'Asset Extractor' tab, with sub-tabs for textures and sounds."""
+        """Creates the UI for the 'Asset Extractor' tab, with sub-tabs for textures, sounds, and configs."""
         main_frame = ttk.Frame(parent_tab_frame, padding="5")
         main_frame.pack(expand=True, fill='both')
 
@@ -332,12 +339,17 @@ class TextureModTool:
         self.asset_extractor_notebook.add(sound_extractor_sub_tab_frame, text='Sound Extractor (SFX/Speech)')
         self._create_sound_extractor_sub_tab_content(sound_extractor_sub_tab_frame)
 
+        #  Sub-tab for Config Extraction ---
+        config_extractor_sub_tab_frame = ttk.Frame(self.asset_extractor_notebook)
+        self.asset_extractor_notebook.add(config_extractor_sub_tab_frame, text='Config Extractor (tabs.flatdata)')
+        self._create_config_extractor_sub_tab_content(config_extractor_sub_tab_frame)
+
     def _create_texture_extractor_sub_tab_content(self, tab_frame):
         """Creates UI elements for the 'Texture Extractor' sub-tab."""
         frame = ttk.Frame(tab_frame, padding="10")
         frame.pack(expand=True, fill='both')
 
-        ttk.Label(frame, text="This tool will unpack game texture archives (.flatdata) to your Mod Project Directory, \nconvert them to .dds, and generate a list of available textures.").pack(pady=(0,5))
+        ttk.Label(frame, text="This tool will unpack game texture archives (.flatdata) to your Mod Project Directory, \nconvert them to .dds, and generate a list of available textures.\nThe selection below includes common texture archive names found across Graviteam games.").pack(pady=(0,5))
 
         # Checkboxes for selecting game texture archives
         archive_frame = ttk.LabelFrame(frame, text="Select Game Texture Archives to Extract", padding="10")
@@ -346,7 +358,8 @@ class TextureModTool:
         self.texture_archives_vars = {} # Stores BooleanVars for checkboxes
         known_texture_archives = [ # Common texture archives in Graviteam games
             "tex_main.flatdata", "tex_main_01.flatdata", "tex_misc.flatdata", "tex_objects.flatdata",
-            "tex_humans.flatdata", "tex_techns.flatdata", "tex_dummy.flatdata", "textures_loc.flatdata"
+            "tex_humans.flatdata", "tex_techns.flatdata", "tex_dummy.flatdata", "textures_loc.flatdata",
+            "tex_techns_01.flatdata", "tex_techns_02.flatdata"
         ]
         for i, archive_name in enumerate(known_texture_archives):
             var = tk.BooleanVar(value=True if archive_name in ["tex_main.flatdata", "tex_objects.flatdata"] else False) # Default selection
@@ -448,6 +461,47 @@ class TextureModTool:
         save_sound_list_button.pack(pady=5, fill=tk.X, padx=20)
         ToolTip(save_sound_list_button, "Saves the list of extracted sound file paths (shown above) to a text file.")
 
+    # --- NEW: Config Extractor Sub-Tab ---
+    def _create_config_extractor_sub_tab_content(self, tab_frame):
+        """Creates UI elements for the 'Config Extractor' sub-tab."""
+        frame = ttk.Frame(tab_frame, padding="10")
+        frame.pack(expand=True, fill='both')
+
+        ttk.Label(frame, text="This tool unpacks the main config archive 'tabs.flatdata' and converts\n"
+                              "the contained .config files into editable .engcfg2 format.").pack(pady=(0, 10))
+
+        # Option to delete temporary unpack folder
+        self.delete_temp_config_unflat_var = tk.BooleanVar(value=True)
+        delete_temp_chk = ttk.Checkbutton(frame, text="Delete temporary unpack folder after extraction",
+                                          variable=self.delete_temp_config_unflat_var)
+        delete_temp_chk.pack(pady=(5,0), anchor="w", padx=20)
+        ToolTip(delete_temp_chk, "If checked, the temporary folder created by 'unflat' in the game directory\nwill be deleted after config files are converted and copied to your mod project.")
+
+        # Button to start config extraction and conversion
+        extract_config_button = ttk.Button(frame, text="Unpack 'tabs.flatdata' & Convert .config to .engcfg2", command=self.extract_and_convert_game_configs)
+        extract_config_button.pack(pady=10, fill=tk.X, padx=20)
+        ToolTip(extract_config_button,
+                "Unpacks 'data/k43t/shared/packed_data/tabs.flatdata' using 'unflat'.\n"
+                "Converts extracted .config files to .engcfg2 using 'cfgp2pd'.\n"
+                "Converted .engcfg2 files are saved to 'ModProjectDir/extracted_game_configs/tabs/'.")
+
+        ttk.Label(frame, text="(.engcfg2 files will be in 'ModProjectDir/extracted_game_configs/tabs/')").pack()
+        ttk.Separator(frame, orient='horizontal').pack(fill='x', pady=10)
+        ttk.Label(frame, text="Extracted Config File List (relative to 'extracted_game_configs/tabs/'):").pack(pady=(5,0))
+
+        # Listbox to display converted config files
+        config_listbox_container_frame = ttk.Frame(frame)
+        config_listbox_container_frame.pack(fill=tk.BOTH, expand=True, pady=5, padx=20)
+        self.extracted_config_listbox = tk.Listbox(config_listbox_container_frame, height=10, relief=tk.SUNKEN, borderwidth=1)
+        config_list_scroll = tk.Scrollbar(config_listbox_container_frame, orient=tk.VERTICAL, command=self.extracted_config_listbox.yview)
+        self.extracted_config_listbox.configure(yscrollcommand=config_list_scroll.set)
+        config_list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.extracted_config_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Button to save the list of converted configs
+        save_config_list_button = ttk.Button(frame, text="Save Config List to File", command=self.save_extracted_config_list)
+        save_config_list_button.pack(pady=5, fill=tk.X, padx=20)
+        ToolTip(save_config_list_button, "Saves the list of converted .engcfg2 config file paths (shown above) to a text file.")
 
     def create_texture_conversion_tab(self, tab_frame):
         """Creates UI elements for the 'Mod Texture Conversion' tab."""
@@ -623,7 +677,7 @@ class TextureModTool:
     def _update_readme_file(self):
         """
         Creates or updates the readme.txt file in the mod project directory
-        using the current mod information from the UI StringVars. 
+        using the current mod information from the UI StringVars.
         Attempts to preserve any existing description in the readme.
         """
         current_mod_project_dir = self.mod_project_dir_var.get()
@@ -709,6 +763,8 @@ class TextureModTool:
             "wav_speech_work": os.path.join(current_mod_project_dir, "wav_speech_work"), # For Speech .wav files
             "prepared_sounds_sfx": os.path.join(current_mod_project_dir, "prepared_sounds", "sfx"), # Final SFX .loc_def.sound
             "prepared_sounds_speech": os.path.join(current_mod_project_dir, "prepared_sounds", "speech"), # Final Speech .loc_def.sound
+            # --- NEW: Folder for extracted config files ---
+            "extracted_configs_base": os.path.join(current_mod_project_dir, "extracted_game_configs", "tabs"), # For converted .engcfg2 from tabs.flatdata
         }
 
         created_any_folder = False
@@ -752,7 +808,7 @@ class TextureModTool:
 
         # --- ADDED POPUP ---
         # Inform the user about the potential duration of the process.
-        messagebox.showinfo("Texture Extraction", 
+        messagebox.showinfo("Texture Extraction",
                             "The texture extraction and conversion process can take several minutes, "
                             "especially for large archives or a large number of selections.\n\n"
                             "The tool may appear unresponsive during this time. Please be patient.")
@@ -823,7 +879,7 @@ class TextureModTool:
                     textures_in_archive_count += 1
                     src_atf_in_game_temp_abs = os.path.join(unflat_output_actual_abs, item) # Source .texture in game's temp unpack dir
                     dest_atf_in_project_abs = os.path.join(final_atf_archive_dir_in_project, item) # Destination for original .texture in mod project
-                    
+
                     # Copy original .texture to mod project (for backup or if deletion is off)
                     try:
                         shutil.copy2(src_atf_in_game_temp_abs, dest_atf_in_project_abs)
@@ -833,11 +889,11 @@ class TextureModTool:
 
                     dds_filename = item.replace(".texture", ".dds")
                     # Temporary output path for DDS file within the game's temp unflat directory
-                    temp_dds_output_in_game_temp_rel = os.path.join(starter_unflat_output_rel, dds_filename) 
+                    temp_dds_output_in_game_temp_rel = os.path.join(starter_unflat_output_rel, dds_filename)
                     temp_dds_output_in_game_temp_abs = os.path.join(current_game_root, temp_dds_output_in_game_temp_rel)
 
                     # Path to source ATF relative to game root, as required by atf2dds
-                    param_src_atf_rel = os.path.relpath(src_atf_in_game_temp_abs, current_game_root) 
+                    param_src_atf_rel = os.path.relpath(src_atf_in_game_temp_abs, current_game_root)
                     # Run 'atf2dds' command
                     conv_success, _ = run_starter_command("atf2dds", [param_src_atf_rel, temp_dds_output_in_game_temp_rel], self.log_area)
 
@@ -881,7 +937,7 @@ class TextureModTool:
 
             if textures_in_archive_count == 0:
                 log_message(self.log_area, f"  No .texture files found in unpacked '{unflat_output_actual_abs}'.")
-            
+
             # Clean up the temporary unpack directory in the game's folder
             if os.path.exists(starter_unflat_output_abs):
                 try:
@@ -942,7 +998,7 @@ class TextureModTool:
                         loc_folders_to_try = [f"loc_{speech_lang_part}", "loc_def"] + loc_folders_to_try
                     else: # For generic speech.flatdata
                         loc_folders_to_try = ["loc_def", "loc_eng", "loc_rus", "loc_ger"]
-                
+
                 for loc_folder in loc_folders_to_try:
                     alt_archive_path_rel = os.path.join("data", "k43t", loc_folder, "packed_data", archive_name)
                     if os.path.exists(os.path.join(current_game_root, alt_archive_path_rel)):
@@ -989,7 +1045,7 @@ class TextureModTool:
 
                     try:
                         shutil.copy2(item_path_abs, dest_sound_file_in_project_abs) # Copy to mod project
-                        
+
                         # If the copied file is .loc_def.sound, rename it to .aaf in the mod project
                         if item_name.lower().endswith(".loc_def.sound"):
                             base_name = item_name[:-len(".loc_def.sound")] # Get name without extension
@@ -1008,7 +1064,7 @@ class TextureModTool:
                             except Exception as e_rename:
                                 log_message(self.log_area, f"    Error renaming {item_name} to {new_item_name}: {e_rename}. Keeping original name.")
                                 # If rename fails, final_item_name_for_list remains the original item_name
-                        
+
                         # Add the (potentially renamed) file to the listbox
                         listbox_entry = os.path.join(archive_base_name, final_item_name_for_list)
                         all_extracted_sound_files_for_list.append(listbox_entry)
@@ -1042,6 +1098,123 @@ class TextureModTool:
         else:
             messagebox.showinfo("Extraction Complete", f"Sound archive extraction complete. Check the 'extracted_game_sounds' folder in your Mod Project Directory and the list. .loc_def.sound files have been renamed to .aaf.")
 
+    # --- NEW: Config Extraction Logic ---
+    def extract_and_convert_game_configs(self):
+        """
+        Handles unpacking 'tabs.flatdata', converting .config files to .engcfg2,
+        and listing them.
+        """
+        if not self._validate_paths(check_mod_project=True): return
+        if not self.initialize_mod_folders(silent=True):
+            log_message(self.log_area, "Failed to initialize mod project folders for config extraction.")
+            return
+
+        config_archive_name = "tabs.flatdata"
+        # Standard path for tabs.flatdata
+        config_archive_rel_path = os.path.join("data", "k43t", "shared", "packed_data", config_archive_name)
+        current_game_root = self.game_root_var.get()
+        config_archive_abs_path = os.path.join(current_game_root, config_archive_rel_path)
+
+        if not os.path.exists(config_archive_abs_path):
+            log_message(self.log_area, f"Error: Config archive '{config_archive_rel_path}' not found in game directory. Cannot proceed.")
+            messagebox.showerror("Archive Not Found", f"The config archive '{config_archive_rel_path}' was not found in your game directory.")
+            return
+
+        log_message(self.log_area, f"Starting config extraction for: {config_archive_rel_path}")
+        self.extracted_config_listbox.delete(0, tk.END) # Clear previous list
+        all_converted_config_files_for_list = [] # For saving to file
+
+        timestamp_prefix = time.strftime("%Y%m%d-%H%M%S")
+        # Define final destination directory within the mod project for converted .engcfg2 files
+        final_extracted_configs_dir_abs = os.path.join(self.mod_project_dir_var.get(), "extracted_game_configs", "tabs")
+        os.makedirs(final_extracted_configs_dir_abs, exist_ok=True)
+
+        # Define a unique temporary output directory for 'unflat'
+        starter_unflat_output_rel = os.path.join("users", "modwork", f"_temp_unflat_config_{timestamp_prefix}_{get_unique_timestamp_suffix()}")
+        starter_unflat_output_abs = os.path.join(current_game_root, starter_unflat_output_rel)
+        os.makedirs(os.path.dirname(starter_unflat_output_abs), exist_ok=True)
+
+        log_message(self.log_area, f"  Unpacking '{config_archive_rel_path}' to game's temp '{starter_unflat_output_rel}'...")
+        # Run 'unflat' command
+        success, unflat_output_actual_abs = run_starter_command("unflat", [config_archive_rel_path, starter_unflat_output_rel], self.log_area, timeout=300)
+
+        if not success or not (unflat_output_actual_abs and os.path.isdir(unflat_output_actual_abs)):
+            log_message(self.log_area, f"  Failed to unpack config archive '{config_archive_name}' or output dir '{unflat_output_actual_abs}' not found. Aborting.")
+            if os.path.exists(starter_unflat_output_abs) and self.delete_temp_config_unflat_var.get():
+                shutil.rmtree(starter_unflat_output_abs) # Clean up temp
+            return
+
+        log_message(self.log_area, f"  Successfully unpacked to '{unflat_output_actual_abs}'. Now converting .config to .engcfg2...")
+
+        configs_found_count = 0
+        configs_converted_count = 0
+
+        # Iterate through unpacked files and convert .config to .engcfg2
+        for item_name in os.listdir(unflat_output_actual_abs):
+            if item_name.lower().endswith(".config"):
+                configs_found_count += 1
+                src_config_in_game_temp_abs = os.path.join(unflat_output_actual_abs, item_name) # Source .config in game's temp unpack dir
+                engcfg2_filename = item_name.replace(".config", ".engcfg2")
+
+                # Temporary output path for .engcfg2 file within the game's temp unflat directory
+                temp_engcfg2_output_in_game_temp_rel = os.path.join(starter_unflat_output_rel, engcfg2_filename)
+                temp_engcfg2_output_in_game_temp_abs = os.path.join(current_game_root, temp_engcfg2_output_in_game_temp_rel)
+
+                # Path to source .config relative to game root, required by cfgp2pd
+                param_src_config_rel = os.path.relpath(src_config_in_game_temp_abs, current_game_root)
+
+                log_message(self.log_area, f"    Converting: {param_src_config_rel} -> temp {temp_engcfg2_output_in_game_temp_rel}")
+                # Run 'cfgp2pd' command
+                conv_success, _ = run_starter_command("cfgp2pd", [param_src_config_rel, temp_engcfg2_output_in_game_temp_rel], self.log_area)
+
+                if conv_success and os.path.exists(temp_engcfg2_output_in_game_temp_abs):
+                    # Copy successfully converted .engcfg2 to the mod project's config directory
+                    dest_engcfg2_in_project_abs = os.path.join(final_extracted_configs_dir_abs, engcfg2_filename)
+                    try:
+                        # Use move instead of copy to save space in temp dir before cleanup
+                        shutil.move(temp_engcfg2_output_in_game_temp_abs, dest_engcfg2_in_project_abs)
+                        listbox_entry = engcfg2_filename # Just the filename for the list
+                        all_converted_config_files_for_list.append(listbox_entry)
+                        self.extracted_config_listbox.insert(tk.END, listbox_entry)
+                        self.extracted_config_listbox.see(tk.END)
+                        configs_converted_count += 1
+                    except Exception as e:
+                        log_message(self.log_area, f"    Error moving converted .engcfg2 '{engcfg2_filename}' to project: {e}")
+                        # If move fails, try to remove the temp file if it still exists
+                        if os.path.exists(temp_engcfg2_output_in_game_temp_abs):
+                            try: os.remove(temp_engcfg2_output_in_game_temp_abs)
+                            except: pass
+                else:
+                    log_message(self.log_area, f"    Failed to convert {item_name}. Temp .engcfg2 not found at {temp_engcfg2_output_in_game_temp_abs} or conversion command failed.")
+                    # Clean up potentially created but invalid temp file
+                    if os.path.exists(temp_engcfg2_output_in_game_temp_abs):
+                        try: os.remove(temp_engcfg2_output_in_game_temp_abs)
+                        except: pass
+
+        if configs_found_count == 0:
+            log_message(self.log_area, f"  No .config files found in unpacked '{unflat_output_actual_abs}'.")
+        else:
+            log_message(self.log_area, f"  Finished processing. Found {configs_found_count} .config files, successfully converted {configs_converted_count} to .engcfg2.")
+
+        # Clean up temporary unpack directory if option is checked
+        if os.path.exists(starter_unflat_output_abs) and self.delete_temp_config_unflat_var.get():
+            try:
+                shutil.rmtree(starter_unflat_output_abs)
+                log_message(self.log_area, f"  Cleaned up temporary unpack directory: {starter_unflat_output_abs}")
+            except Exception as e:
+                log_message(self.log_area, f"  Warning: Could not remove game temp unpack dir {starter_unflat_output_abs}: {e}")
+        elif os.path.exists(starter_unflat_output_abs): # If not deleting, log that it's kept
+             log_message(self.log_area, f"  Kept temporary unpack directory: {starter_unflat_output_abs}")
+
+        self.root.update_idletasks() # Keep UI responsive
+
+        log_message(self.log_area, f"Config file extraction and conversion process finished. {configs_converted_count} files placed in '{final_extracted_configs_dir_abs}'.")
+        if configs_converted_count > 0:
+            messagebox.showinfo("Extraction Complete", f"Config extraction and conversion complete. {configs_converted_count} .engcfg2 files are in '{final_extracted_configs_dir_abs}'.")
+        elif configs_found_count > 0:
+             messagebox.showwarning("Conversion Issues", f"Found {configs_found_count} .config files, but failed to convert them. Check the log for errors.")
+        else:
+             messagebox.showinfo("No Config Files", "No .config files were found within 'tabs.flatdata'.")
 
     def save_extracted_texture_list(self):
         """Saves the content of the extracted texture listbox to a text file."""
@@ -1091,6 +1264,37 @@ class TextureModTool:
             log_message(self.log_area, f"Error saving sound file list: {e}")
             messagebox.showerror("Error", f"Could not save list: {e}")
 
+    # --- NEW: Save Config List ---
+    def save_extracted_config_list(self):
+        """Saves the content of the extracted config listbox to a text file."""
+        if self.extracted_config_listbox.size() == 0:
+            messagebox.showinfo("No List", "Config file list is empty. Extract 'tabs.flatdata' first.")
+            return
+
+        current_mod_project_dir = self.mod_project_dir_var.get()
+        # Suggest saving in the extracted configs directory
+        initial_dir_suggestion = os.path.join(current_mod_project_dir, "extracted_game_configs", "tabs")
+        if not os.path.isdir(initial_dir_suggestion):
+            initial_dir_suggestion = current_mod_project_dir or os.getcwd()
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            title="Save Extracted Config File List As",
+            initialdir=initial_dir_suggestion
+        )
+        if not filepath: return # User cancelled
+
+        try:
+            with open(filepath, "w", encoding='utf-8') as f:
+                for i in range(self.extracted_config_listbox.size()):
+                    f.write(self.extracted_config_listbox.get(i) + "\n")
+            log_message(self.log_area, f"Extracted config file list saved to: {filepath}")
+            messagebox.showinfo("Saved", f"List saved to {filepath}")
+        except Exception as e:
+            log_message(self.log_area, f"Error saving config file list: {e}")
+            messagebox.showerror("Error", f"Could not save list: {e}")
+
     def convert_atf_to_dds_for_modding(self):
         """
         Converts selected .texture (ATF) files to .dds format for editing.
@@ -1100,7 +1304,7 @@ class TextureModTool:
         if not self.initialize_mod_folders(silent=True):
             log_message(self.log_area, "Failed to initialize mod project folders for ATF to DDS conversion.")
             return
-        
+
         current_mod_project_dir = self.mod_project_dir_var.get()
         current_game_root = self.game_root_var.get()
         # Suggest starting directory for file dialog
@@ -1116,11 +1320,11 @@ class TextureModTool:
             filetypes=[("Texture files", "*.texture"), ("All files", "*.*")]
         )
         if not source_atf_files_abs: return # User cancelled
-        
+
         output_dds_dir_abs = os.path.join(current_mod_project_dir, "dds_work") # Output to dds_work folder
         log_message(self.log_area, f"Starting ATF to DDS conversion for {len(source_atf_files_abs)} file(s)...")
         success_count = 0
-        
+
         for atf_path_abs in source_atf_files_abs:
             filename = os.path.basename(atf_path_abs)
             base, _ = os.path.splitext(filename)
@@ -1170,23 +1374,23 @@ class TextureModTool:
         if not self.initialize_mod_folders(silent=True):
             log_message(self.log_area, "Failed to initialize mod project folders for DDS to ATF conversion.")
             return
-        
+
         current_mod_project_dir = self.mod_project_dir_var.get()
         current_game_root = self.game_root_var.get()
         # Suggest starting directory for file dialog (user's DDS work folder)
         source_dds_dir_abs = os.path.join(current_mod_project_dir, "dds_work")
-        
+
         source_dds_files_abs = filedialog.askopenfilenames(
             title="Select .dds files from 'dds_work' to convert",
             initialdir=source_dds_dir_abs, # Default to dds_work
             filetypes=[("DDS files", "*.dds"), ("All files", "*.*")]
         )
         if not source_dds_files_abs: return # User cancelled
-        
+
         output_atf_dir_abs = os.path.join(current_mod_project_dir, "prepared_textures") # Output to prepared_textures
         log_message(self.log_area, f"Starting DDS to ATF conversion for {len(source_dds_files_abs)} file(s)...")
         success_count = 0
-        
+
         for dds_path_abs in source_dds_files_abs:
             filename = os.path.basename(dds_path_abs)
             base, _ = os.path.splitext(filename)
@@ -1310,7 +1514,7 @@ class TextureModTool:
         if not current_mod_project_dir:
             log_message(self.log_area, "Mod Project Directory not set. Cannot load assets.")
             return
-        
+
         total_found = 0
         # Iterate through defined asset types (textures, sounds)
         for asset_type_info in self.asset_types_to_scan:
@@ -1324,7 +1528,7 @@ class TextureModTool:
                         total_found +=1
                 if count_this_type > 0:
                     log_message(self.log_area, f"Found {count_this_type} {asset_type_info['ext']} files in '{asset_type_info['folder']}'.")
-        
+
         if total_found == 0:
             log_message(self.log_area, "No prepared asset files found in expected 'prepared_...' subfolders (textures, sfx, speech).")
         else:
@@ -1354,7 +1558,7 @@ class TextureModTool:
             log_message(self.log_area, f"Error: Template '{template_filename}' not found at {template_path_abs}")
             messagebox.showerror("Template Missing", f"Addon template '{template_filename}' not found in game docs: {template_path_abs}")
             return False
-        
+
         # Read template content, trying various encodings
         desc_engcfg2_content = None
         encodings_to_try = ['utf-8-sig', 'utf-8', 'windows-1251', 'latin-1']
@@ -1368,7 +1572,7 @@ class TextureModTool:
                 log_message(self.log_area, f"Warning: Failed to decode template '{template_filename}' with {enc}. Retrying.")
             except Exception as e:
                 log_message(self.log_area, f"Warning: Failed to read template '{template_filename}' with {enc}: {e}. Retrying.")
-        
+
         if desc_engcfg2_content is None:
             log_message(self.log_area, f"Critical Error: Could not read/decode template '{template_filename}'.")
             messagebox.showerror("Template Read Error", f"Could not read/decode addon template '{template_filename}'.")
@@ -1449,7 +1653,7 @@ class TextureModTool:
             mkflat_file_type (str): The type string used by mkflat (e.g., "texture", "sound").
             files_to_package (list of tuples): Each tuple is (absolute_source_path_in_project, staging_filename).
             game_root_dir (str): Absolute path to the game root directory.
-            core_dir_abs (str): Absolute path to the 'CORE/shared/packed_data' directory in the mod project.
+            core_dir_abs (str): Absolute path to the 'CORE' directory in the mod project (used to build target path).
         Returns:
             bool: True if successful, False otherwise.
         """
@@ -1472,12 +1676,17 @@ class TextureModTool:
         for abs_src_path_in_project, staging_filename in files_to_package:
             flatlist_entry_name = staging_filename
             # Remove game-specific extensions for the flatlist entry name
+            # This assumes the 'type' in the flatlist corresponds to the file without extension.
+            # Check modtools.pdf examples if this assumption is wrong for certain types.
             if flatlist_entry_name.lower().endswith(".loc_def.sound"):
                 flatlist_entry_name = flatlist_entry_name[:-len(".loc_def.sound")]
             elif flatlist_entry_name.lower().endswith(".texture"):
                 flatlist_entry_name = flatlist_entry_name[:-len(".texture")]
+            # Add other types here if needed (e.g., .config?) - Check PDF example in 1.1
 
-            flatlist_content += f"    {flatlist_entry_name}\t, {mkflat_file_type}\t, loc_def ;\n" # Add entry to flatlist
+            # The flatlist format seems to be: "filename_without_ext",", type",", local;"
+            # Assuming 'loc_def' is standard for most mod assets unless specified otherwise.
+            flatlist_content += f"    \"{flatlist_entry_name}\"\t, {mkflat_file_type}\t, loc_def ;\n" # Add entry to flatlist, quoting filename
 
             # Copy asset from mod's 'prepared_...' folder to the staging directory
             dst_asset_for_mkflat_path_abs = os.path.join(mkflat_staging_dir_abs, staging_filename)
@@ -1515,6 +1724,7 @@ class TextureModTool:
         # Define output path for .flatdata archive in staging and final destination in mod project
         flatdata_output_in_staging_rel = os.path.join(mkflat_staging_dir_rel, f"{flatlist_name_stem}.flatdata")
         flatdata_output_in_staging_abs = os.path.join(game_root_dir, flatdata_output_in_staging_rel)
+        # Final path is CORE/shared/packed_data/archive_name.flatdata
         final_flatdata_target_in_project_abs = os.path.join(core_dir_abs, "shared", "packed_data", f"{flatlist_name_stem}.flatdata")
 
         # Run 'mkflat' command to create the .flatdata archive
