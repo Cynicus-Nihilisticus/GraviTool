@@ -1,2 +1,3 @@
 2025-05-11 14:10 SAST - v1.0.0 - CNP - First public release.
-2025-05-11 14:10 SAST - v1.1.0 - CNP - Added ability to extract game config files.2
+2025-05-11 14:10 SAST - v1.1.0 - CNP - Added ability to extract game config files.
+2025-05-13 10:27 SAST - v1.1.1 - CNP - Fixed the way the app created a flatlist, as it broke with the previous update.

@@ -21,3 +21,16 @@ Thumbs.db
 
 # GraviTool config
 gt_texture_mod_tool_config.ini
+Gravitool.spec
+build/Gravitool/Analysis-00.toc
+.gitignore
+build/Gravitool/base_library.zip
+build/Gravitool/EXE-00.toc
+build/Gravitool/Gravitool.pkg
+build/Gravitool/PKG-00.toc
+build/Gravitool/PYZ-00.pyz
+build/Gravitool/PYZ-00.toc
+build/Gravitool/warn-Gravitool.txt
+build/Gravitool/xref-Gravitool.html
+dist/Gravitool.exe
+dist/GravitooV1.1.1l.zip
